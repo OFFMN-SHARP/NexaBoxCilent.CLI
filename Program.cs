@@ -108,8 +108,7 @@ async Task<string?> CommandParserAsync(string Command)
     {
         string[] Cmd = Command.Split(" ");
         if (!string.IsNullOrEmpty(value) && Cmd.Length < 3) throw new Exception($"The command '{Cmd[0]}' requires an additional argument: '{value}'.");
-        if (Cmd.Length > 2) throw new Exception($"Too many arguments provided for the command '{Cmd[0]}'. Expected format: '{Cmd[0]} {value}'.");
-        string Value1 = Cmd[1];
+        string Value1 = Cmd.Length > 1 ? Cmd[1] : String.Empty;
         string Value2 = Cmd.Length >= 4 ? Cmd[3] : "";
         if (!string.IsNullOrEmpty(value) && Value2 != value) throw new Exception($"Invalid argument for the command '{Cmd[0]}'. Expected argument: '{value}'.");
         try
@@ -154,9 +153,11 @@ async Task<string?> CommandParserAsync(string Command)
                     break;
                 case "whoami":
                     if (Cmd.Length != 1) throw new Exception($"The command '{Cmd[0]}' does not require any arguments.");
+                    await UserInfo();
                     break;
                 case "i?":
                     if (Cmd.Length != 1) throw new Exception($"The command '{Cmd[0]}' does not require any arguments.");
+                    await UserInfo();
                     break;
                 case "help":
                     if (Cmd.Length != 1) throw new Exception($"The command '{Cmd[0]}' does not require any arguments.");
@@ -212,6 +213,27 @@ async Task FileSearch(string search)
         Console.WriteLine("File Size: " + file.GetProperty("size").GetInt64() + " bytes");
         Console.WriteLine("File Chunks:" + string.Join(", ", file.GetProperty("chunks").EnumerateArray().Select(c => c.GetString())));
     }
+}
+
+
+async Task UserInfo()
+{
+    Console.ForegroundColor = ConsoleColor.Yellow;
+    HttpResponseMessage userInfoResponse = await client.GetAsync("https://accounts.nexabox.de/api/me");
+    //{"username":"offmn-user","password":"13141516msn","isInitialPassword":false,"permissions":["NexaboxDrive"],"lastLogin":1777299347623}
+    string userInfoContent = await userInfoResponse.Content.ReadAsStringAsync();
+    JsonDocument userInfoDoc = JsonDocument.Parse(userInfoContent);
+    JsonElement userInfoRoot = userInfoDoc.RootElement;
+    Console.WriteLine("User Information:");
+    Console.WriteLine(new string('=', 20));
+    Console.WriteLine("Username: " + userInfoRoot.GetProperty("username").GetString());
+    Console.WriteLine("Permissions: " + string.Join(", ", userInfoRoot.GetProperty("permissions").EnumerateArray().Select(p => p.GetString())));
+    //Console.WriteLine("Last Login: " + userInfoRoot.GetProperty("lastLogin").GetInt64());
+    DateTime lastLogin = DateTimeOffset.FromUnixTimeMilliseconds(userInfoRoot.GetProperty("lastLogin").GetInt64()).DateTime;
+    Console.WriteLine("Last Login: " + lastLogin.ToString("yyyy-MM-dd HH:mm:ss"));
+    Console.WriteLine(new string('=', 20));
+    Console.WriteLine(DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
+    Console.ResetColor();
 }
 
 
