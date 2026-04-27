@@ -9,7 +9,7 @@ Console.CancelKeyPress += CancelExit;
 using HttpClient client = new();
 var _username = string.Empty;
 var _password = string.Empty;
-if (args.Length != 3 || args[0] != "login")
+if (args.Length != 3&&!File.Exists("login.cfg") || args[0] != "login"&&!File.Exists("login.cfg"))
 {
     Console.WriteLine("Usage: login <username> <password>");
     return;
@@ -65,6 +65,12 @@ Console.WriteLine("Permissions Info: " + Permissions);
 Console.WriteLine(new string('=',20));
 Console.WriteLine("Welcome back, Dr." + root.GetProperty("username").GetString());
 Console.ResetColor();
+if(File.Exists("login.cfg"))File.Delete("login.cfg");
+using(StreamWriter sw = new StreamWriter("login.cfg"))
+{
+    sw.WriteLine(_username);
+    sw.WriteLine(_password);
+}
 while (true)
 {
     Console.ForegroundColor = ConsoleColor.Cyan;
