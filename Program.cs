@@ -74,7 +74,7 @@ while (true)
     string Command = Console.ReadLine() ?? "@Signal_UserInput=NULL";
     try
     {
-        CommandParser(Command);
+        await CommandParserAsync(Command);
     }catch (Exception ex)
     {
         Console.ForegroundColor = ConsoleColor.Red;
@@ -84,35 +84,142 @@ while (true)
     Console.WriteLine();
 }
 
-string? CommandParser(string Command)
+async Task<string?> CommandParserAsync(string Command)
 {
     Dictionary<string, string> commands = new()
     {
+        {"@Signal_UserInput=NULL", "" },
         {"where", ""},
         {"whereis", ""},
         {"grep", ""},
         {"show", ""},
         {"fetch", ""},
         {"sed", "to"},
-        {"create_to", "to"},
+        {"create", "to"},
         {"from", "to"},
-        {"download-to", "to"},
+        {"download", "to"},
         {"syscall", ""},
         {"call", ""},
         {"whoami", ""},
         {"i?", ""},
         {"help", ""}
     };
-    if(commands.TryGetValue(Command.Split(" ")[0], out string value))
+    if (commands.TryGetValue(Command.Split(" ")[0], out string value))
     {
         string[] Cmd = Command.Split(" ");
-        if (!string.IsNullOrEmpty(value) && Cmd.Length<3)throw new Exception($"The command '{Cmd[0]}' requires an additional argument: '{value}'.");
-        if(Cmd.Length > 2) throw new Exception($"Too many arguments provided for the command '{Cmd[0]}'. Expected format: '{Cmd[0]} {value}'.");
+        if (!string.IsNullOrEmpty(value) && Cmd.Length < 3) throw new Exception($"The command '{Cmd[0]}' requires an additional argument: '{value}'.");
+        if (Cmd.Length > 2) throw new Exception($"Too many arguments provided for the command '{Cmd[0]}'. Expected format: '{Cmd[0]} {value}'.");
         string Value1 = Cmd[1];
-        string Value2 = Cmd.Length >=4 ? Cmd[3] : "";
+        string Value2 = Cmd.Length >= 4 ? Cmd[3] : "";
+        if (!string.IsNullOrEmpty(value) && Value2 != value) throw new Exception($"Invalid argument for the command '{Cmd[0]}'. Expected argument: '{value}'.");
+        try
+        {
+            switch (Cmd[0])
+            {
+                case "where":
+                    if (Cmd.Length != 2) throw new Exception($"The command '{Cmd[0]}' requires exactly 1 argument.");
+                    await FileSearch(Value1);
+                    break;
+                case "whereis":
+                    if (Cmd.Length != 2) throw new Exception($"The command '{Cmd[0]}' requires exactly 1 argument.");
+                    await FileSearch(Value1);
+                    break;
+                case "grep":
+                    if (Cmd.Length != 2) throw new Exception($"The command '{Cmd[0]}' requires exactly 1 argument.");
+                    await FileSearch(Value1);
+                    break;
+                case "show":
+                    if (Cmd.Length != 2) throw new Exception($"The command '{Cmd[0]}' requires exactly 1 argument.");
+                    break;
+                case "fetch":
+                    if (Cmd.Length != 2) throw new Exception($"The command '{Cmd[0]}' requires exactly 1 argument.");
+                    break;
+                case "sed":
+                    if(Cmd.Length != 4) throw new Exception($"The command '{Cmd[0]}' requires exactly 3 arguments.");
+                    break;
+                case "create":
+                    if (Cmd.Length != 4) throw new Exception($"The command '{Cmd[0]}' requires exactly 3 arguments.");
+                    break;
+                case "from":
+                    if (Cmd.Length != 4) throw new Exception($"The command '{Cmd[0]}' requires exactly 3 arguments.");
+                    break;
+                case "download":
+                    if (Cmd.Length != 4) throw new Exception($"The command '{Cmd[0]}' requires exactly 3 arguments.");
+                    break;
+                case "syscall":
+                    if (Cmd.Length != 2) throw new Exception($"The command '{Cmd[0]}' requires exactly 1 argument.");
+                    break;
+                case "call":
+                    if (Cmd.Length != 2) throw new Exception($"The command '{Cmd[0]}' requires exactly 1 argument.");
+                    break;
+                case "whoami":
+                    if (Cmd.Length != 1) throw new Exception($"The command '{Cmd[0]}' does not require any arguments.");
+                    break;
+                case "i?":
+                    if (Cmd.Length != 1) throw new Exception($"The command '{Cmd[0]}' does not require any arguments.");
+                    break;
+                case "help":
+                    if (Cmd.Length != 1) throw new Exception($"The command '{Cmd[0]}' does not require any arguments.");
+                    break;
+            }
+
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.Message);
+        }
+        return null;
     }
     else throw new Exception("Unknown command. Type 'help' for a list of available commands.");
 }
+
+async Task FileSearch(string search)
+{
+    HttpResponseMessage whereResponse = await client.GetAsync("https://drive.nexabox.de/api/files");
+    string whereContent = await whereResponse.Content.ReadAsStringAsync();
+    JsonDocument WhereDoc = JsonDocument.Parse(whereContent);
+    List<JsonElement> files = new List<JsonElement>();
+    Console.WriteLine("Searching from drive files: ");
+    foreach (JsonElement file in WhereDoc.RootElement.EnumerateArray())
+    {
+        Console.WriteLine(file.GetProperty("filename").GetString());
+        if (!string.IsNullOrEmpty(file.GetProperty("filename").GetString()))
+        {
+            if (!search.StartsWith('*'))
+            {
+                if (file.GetProperty("filename").GetString() == search)
+                {
+                    files.Add(file);
+                }
+            }
+            else
+            {
+                if (file.GetProperty("filename").GetString().EndsWith(search.TrimStart('*')))
+                {
+                    files.Add(file);
+                }
+            }
+        }
+    }
+    Console.WriteLine();
+    Console.WriteLine();
+    Console.WriteLine("Search completed.");
+    foreach (JsonElement file in files)
+    {
+        Console.WriteLine("----------------------------");
+        Console.WriteLine("File ID: " + file.GetProperty("id").GetString());
+        Console.WriteLine("File Name: " + file.GetProperty("filename").GetString());
+        Console.WriteLine("File Size: " + file.GetProperty("size").GetInt64() + " bytes");
+        Console.WriteLine("File Chunks:" + string.Join(", ", file.GetProperty("chunks").EnumerateArray().Select(c => c.GetString())));
+    }
+}
+
+
+
+
+
+
+
 
 void CancelExit(object sender, ConsoleCancelEventArgs e)
 {
