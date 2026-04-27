@@ -162,6 +162,10 @@ async Task<string?> CommandParserAsync(string Command)
                 case "help":
                     if (Cmd.Length != 1) throw new Exception($"The command '{Cmd[0]}' does not require any arguments.");
                     break;
+                case "exit":
+                    if (Cmd.Length != 1) throw new Exception($"The command '{Cmd[0]}' does not require any arguments.");
+                    await Exit();
+                    break;
             }
 
         }
@@ -239,7 +243,13 @@ async Task UserInfo()
 
 
 
-
+async Task Exit()
+{
+    Console.ResetColor();
+    Console.WriteLine();
+    Console.WriteLine("Exiting...");
+    Environment.Exit(0);
+}
 
 
 
