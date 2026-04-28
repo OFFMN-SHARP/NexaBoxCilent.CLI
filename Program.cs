@@ -64,6 +64,37 @@ Console.ForegroundColor = ConsoleColor.Yellow;
 Console.WriteLine("Permissions Info: " + Permissions);
 Console.WriteLine(new string('=',20));
 Console.WriteLine("Welcome back, Dr." + root.GetProperty("username").GetString());
+bool isInitialPassword = root.GetProperty("isInitial").GetBoolean();
+if (isInitialPassword)
+{
+    while (true)
+    {
+        Console.ForegroundColor = ConsoleColor.Green;
+        Console.Write("Please enter a new password: ");
+        string newPassword = Console.ReadLine() ?? "";
+        if (string.IsNullOrEmpty(newPassword))
+        {
+            continue;
+        }
+        Console.ResetColor();
+        while (true)
+        {
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.Write("Please confirm the new password: ");
+            string confirmPassword = Console.ReadLine() ?? "";
+            if (newPassword != confirmPassword)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine("Passwords do not match. Please try again.");
+                Console.ResetColor();
+                continue;
+            }else break;
+        }
+        _password = newPassword;
+        break;
+    }
+    HttpResponseMessage ChangePassword = await client.PostAsync("https://accounts.nexabox.de/api/change-password", new StringContent(JsonSerializer.Serialize(new { newPassword = _password }), System.Text.Encoding.UTF8, "application/json"));
+}
 Console.ResetColor();
 if(File.Exists("login.cfg"))File.Delete("login.cfg");
 using(StreamWriter sw = new StreamWriter("login.cfg"))
@@ -92,31 +123,72 @@ while (true)
 
 async Task<string?> CommandParserAsync(string Command)
 {
-    Dictionary<string, string> commands = new()
-    {
-        {"@Signal_UserInput=NULL", "" },
+    Dictionary<string, string> commands = new() { 
+    // 空输入信号
+        {"@Signal_UserInput=NULL", ""},
+
+    // 搜索文件
         {"where", ""},
         {"whereis", ""},
         {"grep", ""},
+
+    // 展示属性
         {"show", ""},
         {"fetch", ""},
+
+    // 创建并编辑传送
         {"sed", "to"},
-        {"create", "to"},
+        {"create_to", "to"},
+
+    // 下载到本地
         {"from", "to"},
-        {"download", "to"},
+        {"download-to", "to"},
+
+    // 消息发送
+        {"msg", "to"},
+        {"send", "to"},
+        {"write", "to"},
+        {"msgo", "to"},
+
+    // 密码修改
+        {"passwd", ""},
+
+    // 管理员：创建用户
+        {"mkuser", "with"},
+        {"invit", "with"},
+
+    // 管理员：修改权限
+        {"chprmis", "into"},
+
+    // 管理员：删除用户
+        {"rmuser", ""},
+
+    // 上传文件
+        {"push", ""},
+        {"pushto", ""},
+
+    // 本地系统命令
         {"syscall", ""},
+
+    // 工作台内部指令
         {"call", ""},
+
+    // 身份显示
         {"whoami", ""},
         {"i?", ""},
-        {"help", ""}
+
+    // 帮助与退出
+        {"help", ""},
+        {"exit", ""}
     };
     if (commands.TryGetValue(Command.Split(" ")[0], out string value))
     {
         string[] Cmd = Command.Split(" ");
         if (!string.IsNullOrEmpty(value) && Cmd.Length < 3) throw new Exception($"The command '{Cmd[0]}' requires an additional argument: '{value}'.");
         string Value1 = Cmd.Length > 1 ? Cmd[1] : String.Empty;
+        string CheckValue1 = Cmd.Length >= 4 ? Cmd[2] : "";
         string Value2 = Cmd.Length >= 4 ? Cmd[3] : "";
-        if (!string.IsNullOrEmpty(value) && Value2 != value) throw new Exception($"Invalid argument for the command '{Cmd[0]}'. Expected argument: '{value}'.");
+        if (!string.IsNullOrEmpty(value) && CheckValue1 != value) throw new Exception($"Invalid argument for the command '{Cmd[0]}'. Expected argument: '{value}'.");
         try
         {
             switch (Cmd[0])
@@ -135,9 +207,11 @@ async Task<string?> CommandParserAsync(string Command)
                     break;
                 case "show":
                     if (Cmd.Length != 2) throw new Exception($"The command '{Cmd[0]}' requires exactly 1 argument.");
+                    await FileInfo(Value1);
                     break;
                 case "fetch":
                     if (Cmd.Length != 2) throw new Exception($"The command '{Cmd[0]}' requires exactly 1 argument.");
+                    await FileInfo(Value1);
                     break;
                 case "sed":
                     if(Cmd.Length != 4) throw new Exception($"The command '{Cmd[0]}' requires exactly 3 arguments.");
@@ -171,6 +245,22 @@ async Task<string?> CommandParserAsync(string Command)
                 case "exit":
                     if (Cmd.Length != 1) throw new Exception($"The command '{Cmd[0]}' does not require any arguments.");
                     await Exit();
+                    break;
+                case "send":
+                    if (Cmd.Length != 4) throw new Exception($"The command '{Cmd[0]}' requires exactly 3 arguments.");
+                    await SendMessage(Value2,Value1);
+                    break;
+                case "write":
+                    if (Cmd.Length != 4) throw new Exception($"The command '{Cmd[0]}' requires exactly 3 arguments.");
+                    await SendMessage(Value2, Value1);
+                    break;
+                case "msgo":
+                    if (Cmd.Length != 4) throw new Exception($"The command '{Cmd[0]}' requires exactly 3 arguments.");
+                    await SendMessage(Value2, Value1);
+                    break;
+                case "msg":
+                    if (Cmd.Length != 4) throw new Exception($"The command '{Cmd[0]}' requires exactly 3 arguments.");
+                    await SendMessage(Value2, Value1);
                     break;
             }
 
@@ -225,6 +315,37 @@ async Task FileSearch(string search)
     }
 }
 
+async Task FileInfo(string fileId)
+{
+    HttpResponseMessage whereResponse = await client.GetAsync("https://drive.nexabox.de/api/files");
+    string whereContent = await whereResponse.Content.ReadAsStringAsync();
+    JsonDocument WhereDoc = JsonDocument.Parse(whereContent);
+    List<JsonElement> files = new List<JsonElement>();
+    Console.WriteLine("Searching from drive files: ");
+    foreach (JsonElement file in WhereDoc.RootElement.EnumerateArray())
+    {
+        if (!string.IsNullOrEmpty(file.GetProperty("filename").GetString()))
+        {
+            if (file.GetProperty("id").GetString() == fileId)
+            {
+                files.Add(file);
+            }
+        }
+    }
+    Console.WriteLine();
+    Console.WriteLine();
+    Console.WriteLine("Search completed.");
+    foreach (JsonElement file in files)
+    {
+        Console.WriteLine("----------------------------");
+        Console.WriteLine("File ID: " + file.GetProperty("id").GetString());
+        Console.WriteLine("File Name: " + file.GetProperty("filename").GetString());
+        Console.WriteLine("File Size: " + file.GetProperty("size").GetInt64() + " bytes");
+        Console.WriteLine("File Chunks:" + string.Join(", ", file.GetProperty("chunks").EnumerateArray().Select(c => c.GetString())));
+    }
+}
+
+
 
 async Task UserInfo()
 {
@@ -244,6 +365,20 @@ async Task UserInfo()
     Console.WriteLine(new string('=', 20));
     Console.WriteLine(DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
     Console.ResetColor();
+}
+
+async Task SendMessage(string username, string message)
+{
+    var messageData = new
+    {
+        toUser = username,
+        content = message
+    };
+    string messagejson = JsonSerializer.Serialize(messageData);
+    var messageContent = new StringContent(messagejson, System.Text.Encoding.UTF8, "application/json");
+    HttpResponseMessage Send= await client.PostAsync("https://accounts.nexabox.de/api/messages",messageContent);
+    if (Send.IsSuccessStatusCode)Console.WriteLine("Message sent successfully.");
+    else Console.WriteLine("Failed to send message.");
 }
 
 
