@@ -1,10 +1,11 @@
 ﻿using Microsoft.Extensions.Configuration.Ini;
+using System.Diagnostics;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 
-const string build = "3058";
+const string build = "4063";
 
 Console.CancelKeyPress += CancelExit;
 using HttpClient client = new();
@@ -224,15 +225,19 @@ async Task<string?> CommandParserAsync(string Command)
                     break;
                 case "from":
                     if (Cmd.Length != 4) throw new Exception($"The command '{Cmd[0]}' requires exactly 3 arguments.");
+                    await DownloadFile(Value1, Value2);
                     break;
                 case "download":
                     if (Cmd.Length != 4) throw new Exception($"The command '{Cmd[0]}' requires exactly 3 arguments.");
+                    await DownloadFile(Value1, Value2);
                     break;
                 case "syscall":
                     if (Cmd.Length != 2) throw new Exception($"The command '{Cmd[0]}' requires exactly 1 argument.");
+                    await CallSystemCommand(Value1);
                     break;
                 case "call":
                     if (Cmd.Length != 2) throw new Exception($"The command '{Cmd[0]}' requires exactly 1 argument.");
+                    Console.WriteLine("Not supported yet.");
                     break;
                 case "whoami":
                     if (Cmd.Length != 1) throw new Exception($"The command '{Cmd[0]}' does not require any arguments.");
@@ -244,6 +249,7 @@ async Task<string?> CommandParserAsync(string Command)
                     break;
                 case "help":
                     if (Cmd.Length != 1) throw new Exception($"The command '{Cmd[0]}' does not require any arguments.");
+                    await Help();
                     break;
                 case "exit":
                     if (Cmd.Length != 1) throw new Exception($"The command '{Cmd[0]}' does not require any arguments.");
@@ -287,9 +293,11 @@ async Task<string?> CommandParserAsync(string Command)
                     break;
                 case "push":
                     if (Cmd.Length != 2) throw new Exception($"The command '{Cmd[0]}' requires exactly 1 argument.");
+                    await Uploader(Value1);
                     break;
                 case "pushto":
                     if (Cmd.Length != 2) throw new Exception($"The command '{Cmd[0]}' requires exactly 1 arguments.");
+                    await Uploader(Value1);
                     break;
             }
 
@@ -330,6 +338,7 @@ async Task FileSearch(string search)
                 }
             }
         }
+        Console.Out.Flush();
     }
     Console.WriteLine();
     Console.WriteLine();
@@ -520,12 +529,198 @@ async Task DeleteUser(string username)
         Console.WriteLine($"Failed to delete user '{username}'.");
 }
 
+async Task Uploader(string filePath)
+{
+    var fileslice = await SliceFile(filePath);
+    List<string> chunks = new List<string>();
+    for(int i = 0; i < fileslice.Count; i++)
+    {
+        HttpResponseMessage signResp = await client.GetAsync(
+            "https://drive.nexabox.de/api/signature");
+        using JsonDocument signDoc = JsonDocument.Parse(
+            await signResp.Content.ReadAsStringAsync());
+        JsonElement signRoot = signDoc.RootElement;
+
+        string host = signRoot.GetProperty("host").GetString();
+        string accessKeyId = signRoot.GetProperty("accessKeyId").GetString();
+        string signature = signRoot.GetProperty("signature").GetString();
+        string policy = signRoot.GetProperty("policy").GetString();
+
+        using var formData = new MultipartFormDataContent();
+        formData.Add(new StringContent(accessKeyId), "OSSAccessKeyId");
+        formData.Add(new StringContent(signature), "signature");
+        formData.Add(new StringContent(policy), "policy");
+        formData.Add(new StringContent(i.ToString()), "key");  
+        formData.Add(new ByteArrayContent(fileslice[i]), "file", "slice.png");
+        formData.Headers.ContentType.MediaType = "image/png";
+        HttpResponseMessage uploadResp = await client.PostAsync(host, formData);
+
+        if (!uploadResp.IsSuccessStatusCode)
+        {
+            Console.WriteLine($"Failed to upload slice {i}.");
+            return;
+        }
+        // 记录切片 URL（OSS 返回的地址）
+        string chunkUrl = host + "/" + i;  // 具体以 API 返回为准
+        chunks.Add(chunkUrl);
+        Console.WriteLine($"Slice {i + 1}/{fileslice.Count} uploaded.");
+        var meta = new
+        {
+            filename = Path.GetFileName(filePath),
+            size = new FileInfo(filePath).Length,
+            chunks = chunks
+        };
+        var metaContent = new StringContent(
+            JsonSerializer.Serialize(meta), Encoding.UTF8, "application/json");
+        HttpResponseMessage metaResp = await client.PostAsync(
+            "https://drive.nexabox.de/api/files", metaContent);
+
+        if (metaResp.IsSuccessStatusCode)
+            Console.WriteLine("Upload complete.");
+        else
+            Console.WriteLine("Metadata submission failed.");
+    }
+}
 
 
+async Task<List<byte[]>> SliceFile(string filePath, long sliceSize = 256 * 1024 * 1024) // 默认 256MB
+{
+    var slices = new List<byte[]>();
+
+    using FileStream fs = File.OpenRead(filePath);
+    long fileSize = fs.Length;
+    long remaining = fileSize;
+
+    while (remaining > 0)
+    {
+        int currentSliceSize = (int)Math.Min(sliceSize, remaining);
+        byte[] buffer = new byte[currentSliceSize];
+        await fs.ReadAsync(buffer, 0, currentSliceSize);
+        slices.Add(buffer);
+        remaining -= currentSliceSize;
+    }
+
+    Console.WriteLine($"File sliced into {slices.Count} part(s).");
+    return slices;
+}
+
+async Task CallSystemCommand(string command)
+{
+    string headle;
+    if(Environment.OSVersion.Platform == PlatformID.Win32NT)
+    {
+        headle = "cmd /c";
+    }else headle = "/bin/bash -c";
+    var proc = new Process();
+    proc.StartInfo.FileName = headle;
+    proc.StartInfo.Arguments = "\"" + command + "\"";
+    proc.StartInfo.UseShellExecute = false;
+    proc.StartInfo.RedirectStandardOutput = true;
+    proc.StartInfo.RedirectStandardError = true;
+    proc.StartInfo.CreateNoWindow = true;
+    proc.Start();
+    string output = proc.StandardOutput.ReadToEnd();
+    string error = proc.StandardError.ReadToEnd();
+    proc.WaitForExit();
+    Console.WriteLine(output);
+    if (!string.IsNullOrEmpty(error)) Console.WriteLine(error);
+}
 
 
+async Task DownloadFile(string fileName, string localPath)
+{
+    // 1. 获取文件列表，找到目标文件
+    HttpResponseMessage listResp = await client.GetAsync("https://drive.nexabox.de/api/files");
+    if (!listResp.IsSuccessStatusCode)
+    {
+        Console.WriteLine("Failed to retrieve file list.");
+        return;
+    }
+    string listContent = await listResp.Content.ReadAsStringAsync();
+    using JsonDocument listDoc = JsonDocument.Parse(listContent);
 
+    JsonElement? targetFile = null;
+    foreach (JsonElement file in listDoc.RootElement.EnumerateArray())
+    {
+        if (file.GetProperty("filename").GetString() == fileName)
+        {
+            targetFile = file;
+            break;
+        }
+    }
 
+    if (targetFile == null)
+    {
+        Console.WriteLine($"File '{fileName}' not found on drive.");
+        return;
+    }
+
+    // 2. 获取切片 URL 列表
+    var chunks = targetFile.Value.GetProperty("chunks").EnumerateArray()
+        .Select(c => c.GetString())
+        .ToList();
+
+    long totalSize = targetFile.Value.GetProperty("size").GetInt64();
+    Console.WriteLine($"Downloading '{fileName}' ({totalSize} bytes, {chunks.Count} chunks)...");
+
+    // 3. 按顺序下载所有切片并写入本地文件
+    using FileStream fs = File.Create(localPath);
+    long downloaded = 0;
+
+    for (int i = 0; i < chunks.Count; i++)
+    {
+        string chunkUrl = chunks[i];
+        HttpResponseMessage chunkResp = await client.GetAsync(chunkUrl);
+        if (!chunkResp.IsSuccessStatusCode)
+        {
+            Console.WriteLine($"Failed to download chunk {i + 1}/{chunks.Count}.");
+            return;
+        }
+
+        using Stream chunkStream = await chunkResp.Content.ReadAsStreamAsync();
+        await chunkStream.CopyToAsync(fs);
+        downloaded += chunkStream.Length; // approximate
+
+        // 进度提示
+        Console.Write($"\rProgress: {i + 1}/{chunks.Count} chunks downloaded");
+    }
+
+    Console.WriteLine();
+    Console.WriteLine($"Download complete. File saved to '{localPath}'.");
+}
+
+async Task Help()
+{
+    Console.ForegroundColor = ConsoleColor.Yellow;
+    Console.WriteLine("Nexabox CLI - Command Reference");
+    Console.WriteLine(new string('=', 40));
+    Console.ResetColor();
+
+    Console.WriteLine("  login <username> <password>    登录到 Nexabox");
+    Console.WriteLine("  exit                            退出 CLI");
+    Console.WriteLine();
+    Console.WriteLine("  File Operations:");
+    Console.WriteLine("  where <file/folder>             搜索文件 (别名: whereis, grep)");
+    Console.WriteLine("  show <file>                     展示文件属性 (别名: fetch)");
+    Console.WriteLine("  sed <file>                      创建并编辑文件 (别名: create)");
+    Console.WriteLine("  from <file> to <path>           下载文件 (别名: download-to)");
+    Console.WriteLine("  push <file>                     上传文件 (别名: pushto)");
+    Console.WriteLine();
+    Console.WriteLine("  Messaging:");
+    Console.WriteLine("  msg <text> to <user>            发送消息 (别名: send, write, msgo)");
+    Console.WriteLine();
+    Console.WriteLine("  User & Admin:");
+    Console.WriteLine("  whoami                          显示当前用户 (别名: i?)");
+    Console.WriteLine("  passwd                          修改密码");
+    Console.WriteLine("  mkuser <name> with <pass>       创建用户 (别名: invit)");
+    Console.WriteLine("  chprmis <name> into <perms>     修改用户权限");
+    Console.WriteLine("  rmuser <name>                   删除用户");
+    Console.WriteLine();
+    Console.WriteLine("  System:");
+    Console.WriteLine("  syscall <cmd>                   执行本地命令");
+    Console.WriteLine("  call <cmd>                      执行工作台指令");
+    Console.WriteLine("  help                            显示此帮助");
+}
 
 
 
@@ -631,7 +826,8 @@ async Task Edit(string FileName)
             Console.WriteLine("Step1:Select the save mode.");
             Console.WriteLine("1:Save to file.");
             Console.WriteLine("2:Send  text to someone.");
-            Console.WriteLine("3:Cancel.");
+            Console.WriteLine("3:Upload to cloud storage.");
+            Console.WriteLine("4:Cancel.");
             Console.Write("Input the number:");
             int Save_Mode;
             try
@@ -646,9 +842,12 @@ async Task Edit(string FileName)
             switch (Save_Mode)
             {
                 case 1:
-                    Console.Write("Input the file name:");
-                    string Save_File_Name = Console.ReadLine() ?? "null";
-                    File.WriteAllText(Save_File_Name, Text_Temp.ToString());
+                    if(string.IsNullOrEmpty(FileName))
+                    {
+                        Console.Write("Input the file name:");
+                        FileName = Console.ReadLine() ?? "null";
+                    }
+                    File.WriteAllText(FileName, Text_Temp.ToString());
                     Console.WriteLine("Message: Text saved to file.");
                     break;
                 case 2:
@@ -657,6 +856,16 @@ async Task Edit(string FileName)
                     await SendMessage(To_User, Text_Temp.ToString());
                     break;
                 case 3:
+                    if (string.IsNullOrEmpty(FileName))
+                    {
+                        Console.Write("Input the file name:");
+                        FileName = Console.ReadLine() ?? "null";
+                    }
+                    File.WriteAllText(FileName, Text_Temp.ToString());
+                    await Uploader(FileName);
+                    File.Delete(FileName);
+                    break;
+                case 4:
                     Console.WriteLine("Message: Cancelled.");
                     return;
             }
