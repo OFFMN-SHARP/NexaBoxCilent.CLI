@@ -2,7 +2,7 @@
 |--------|------|------|------|
 | `where <file/folder>` | `whereis`, `grep` | SQL / Linux | 搜索文件或文件夹 |
 | `show <file>` | `fetch` | C# / HTTP | 展示文件属性/元数据 |
-| `sed <file> to <path>` | `create_to` | Linux (Stream EDitor) | 创建并编辑文件，发送到目标路径 |
+| `sed <file>` | `create` | Linux (Stream EDitor) | 创建并编辑文件，发送到目标路径 |
 | `from <file> to <path>` | `download-to` | SQL | 从远端下载文件到指定路径 |
 | `syscall <cmd>` | — | ASM | 执行本地系统命令 |
 | `call <cmd>` | — | ASM | 执行工作台内部指令 |

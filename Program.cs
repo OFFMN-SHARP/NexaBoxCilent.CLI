@@ -1,7 +1,8 @@
-﻿using System.Net.Http;
-using System.Threading.Tasks;
+﻿using Microsoft.Extensions.Configuration.Ini;
+using System.Net.Http;
+using System.Text;
 using System.Text.Json;
-using Microsoft.Extensions.Configuration.Ini;
+using System.Threading.Tasks;
 
 const string build = "3058";
 
@@ -137,8 +138,8 @@ async Task<string?> CommandParserAsync(string Command)
         {"fetch", ""},
 
     // 创建并编辑传送
-        {"sed", "to"},
-        {"create_to", "to"},
+        {"sed", ""},
+        {"create", ""},
 
     // 下载到本地
         {"from", "to"},
@@ -214,10 +215,12 @@ async Task<string?> CommandParserAsync(string Command)
                     await FileInfo(Value1);
                     break;
                 case "sed":
-                    if(Cmd.Length != 4) throw new Exception($"The command '{Cmd[0]}' requires exactly 3 arguments.");
+                    if(Cmd.Length != 2) throw new Exception($"The command '{Cmd[0]}' requires exactly 1 argument.");
+                    await Edit(Value1);
                     break;
                 case "create":
-                    if (Cmd.Length != 4) throw new Exception($"The command '{Cmd[0]}' requires exactly 3 arguments.");
+                    if (Cmd.Length != 2) throw new Exception($"The command '{Cmd[0]}' requires exactly 1 argument.");
+                    await Edit(Value1);
                     break;
                 case "from":
                     if (Cmd.Length != 4) throw new Exception($"The command '{Cmd[0]}' requires exactly 3 arguments.");
@@ -261,6 +264,32 @@ async Task<string?> CommandParserAsync(string Command)
                 case "msg":
                     if (Cmd.Length != 4) throw new Exception($"The command '{Cmd[0]}' requires exactly 3 arguments.");
                     await SendMessage(Value2, Value1);
+                    break;
+                case "passwd":
+                    if (Cmd.Length != 2) throw new Exception($"The command '{Cmd[0]}' requires exactly 1 argument.");
+                    await ChangeUserPassword();
+                    break;
+                case "mkuser":
+                    if (Cmd.Length != 4) throw new Exception($"The command '{Cmd[0]}' requires exactly 3 arguments.");
+                    await NewUser(Value1, Value2);
+                    break;
+                case "invit":
+                    if (Cmd.Length != 4) throw new Exception($"The command '{Cmd[0]}' requires exactly 3 arguments.");
+                    await NewUser(Value1, Value2);
+                    break;
+                case "chprmis":
+                    if (Cmd.Length != 4) throw new Exception($"The command '{Cmd[0]}' requires exactly 3 arguments.");
+                    await ChangeUserPermissions(Value1, Value2);
+                    break;
+                case "rmuser":
+                    if (Cmd.Length != 2) throw new Exception($"The command '{Cmd[0]}' requires exactly 1 argument.");
+                    await DeleteUser(Value1);
+                    break;
+                case "push":
+                    if (Cmd.Length != 2) throw new Exception($"The command '{Cmd[0]}' requires exactly 1 argument.");
+                    break;
+                case "pushto":
+                    if (Cmd.Length != 2) throw new Exception($"The command '{Cmd[0]}' requires exactly 1 arguments.");
                     break;
             }
 
@@ -402,4 +431,254 @@ void CancelExit(object sender, ConsoleCancelEventArgs e)
     Console.WriteLine("Exiting...");
     Environment.Exit(0);
 }
+
+
+
+async Task ChangeUserPassword()
+{
+    while (true)
+    {
+        Console.ForegroundColor = ConsoleColor.Green;
+        Console.Write("Please enter your new password: ");
+        string newPassword = Console.ReadLine() ?? "";
+        if (!string.IsNullOrEmpty(newPassword))
+        {
+            while (true)
+            {
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.Write("Please confirm your new password: ");
+                string confirmPassword = Console.ReadLine() ?? "";
+                Console.ResetColor();
+                if (newPassword == confirmPassword)
+                {
+                    //{"newPassword": "my_new_password_123"}
+                    var changePasswordData = new
+                    {
+                        newPassword = newPassword
+                    };
+                    string changePasswordjson = JsonSerializer.Serialize(changePasswordData);
+                    var changePasswordContent = new StringContent(changePasswordjson, System.Text.Encoding.UTF8, "application/json");
+                    HttpResponseMessage changePasswordResponse = await client.PostAsync("https://accounts.nexabox.de/api/change-password", changePasswordContent);
+                    if (changePasswordResponse.IsSuccessStatusCode)
+                    {
+                        Console.WriteLine("Password changed successfully.");
+                        return;
+                    }
+                    else
+                    {
+                        Console.WriteLine("Failed to change password.");
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+async Task NewUser(string username, string password)
+{//{"username": "new_guy", "initialPassword": "123456"}
+    string newUserjson = JsonSerializer.Serialize(new { username = username, initialPassword = password });
+    var newUserContent = new StringContent(newUserjson, System.Text.Encoding.UTF8, "application/json");
+    HttpResponseMessage newUserResponse = await client.PostAsync("https://accounts.nexabox.de/api/admin/users", newUserContent);
+    if (newUserResponse.IsSuccessStatusCode)
+    {
+        Console.WriteLine("User created successfully.");
+    }
+    else
+    {
+        Console.WriteLine("Failed to create user.");
+    }
+}
+
+
+async Task ChangeUserPermissions(string username, string permission)
+{//{"username": "new_guy", "permissions": ["DataBoard", "Wiki"]}
+    ///api/admin/users/permissions
+    string[] group=permission.Split('@');
+    string changePermissionsjson = JsonSerializer.Serialize(new { username = username, permissions = group });
+    var changePermissionsContent = new StringContent(changePermissionsjson, System.Text.Encoding.UTF8, "application/json");
+    HttpResponseMessage changePermissionsResponse = await client.PutAsync("https://accounts.nexabox.de/api/admin/users/permissions", changePermissionsContent);
+    if (changePermissionsResponse.IsSuccessStatusCode)
+    {
+        Console.WriteLine("User permissions changed successfully.");
+    }else Console.WriteLine("Failed to change user permissions.");
+}
+
+
+async Task DeleteUser(string username)
+{
+    var deleteData = new { username = username };
+    string json = JsonSerializer.Serialize(deleteData);
+    var request = new HttpRequestMessage(HttpMethod.Delete, "https://accounts.nexabox.de/api/admin/users")
+    {
+        Content = new StringContent(json, Encoding.UTF8, "application/json")
+    };
+    HttpResponseMessage response = await client.SendAsync(request);
+    if (response.IsSuccessStatusCode)
+        Console.WriteLine($"User '{username}' deleted successfully.");
+    else
+        Console.WriteLine($"Failed to delete user '{username}'.");
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+async Task Edit(string FileName)
+{
+    Console.WriteLine("Message: Edit Mode (Write)");
+    Console.WriteLine("Message: Type '/help' for help.");
+    Console.WriteLine("Message: Type '/exit' to exit.");
+    StringBuilder Text_Temp = new StringBuilder();
+    int Up_LineCount = 0;//Up_LineCount is Update Line Count, which means the line number of the current input line.
+    while (true)
+    {
+        Up_LineCount++;
+        Console.ForegroundColor = ConsoleColor.Yellow;
+        Console.Write($"[{Up_LineCount}]>>");
+        Console.ResetColor();
+        string? Input = Console.ReadLine() ?? "@[Editor_NULLinput]_Replace_NULLinput_[SrcInfoOfEditor]";
+        if (Input.ToLower() == "/help")
+        {
+            Console.WriteLine("Message: Edit Mode (Write) Help");
+            Console.WriteLine("Message: Type '/help' for help.");
+            Console.WriteLine("Message: Type '/exit' to exit.");
+            Console.WriteLine("Message: Type '/clear' to clear the text.");
+            Console.WriteLine("Tip: '[Up_LineCount]>>' means the current line number.");
+        }
+        else if (Input.ToLower() == "/exit")
+        {
+            Console.WriteLine("Message: Starting to save the text.");
+            Console.WriteLine("Step1:Select the save mode.");
+            Console.WriteLine("1:Save to file.");
+            Console.WriteLine("2:Send  text to someone.");
+            Console.WriteLine("3:Cancel.");
+            Console.Write("Input the number:");
+            int Save_Mode;
+            try
+            {
+                Save_Mode = int.Parse(Console.ReadLine() ?? "2");
+            }
+            catch
+            {
+                Console.WriteLine("Message: Invalid input. Defaulting to output to console.");
+                Save_Mode = 2;
+            }
+            switch (Save_Mode)
+            {
+                case 1:
+                    Console.Write("Input the file name:");
+                    string Save_File_Name = Console.ReadLine() ?? "null";
+                    File.WriteAllText(Save_File_Name, Text_Temp.ToString());
+                    Console.WriteLine("Message: Text saved to file.");
+                    break;
+                case 2:
+                    Console.Write("Input the username:");
+                    string To_User = Console.ReadLine() ?? "null";
+                    await SendMessage(To_User, Text_Temp.ToString());
+                    break;
+                case 3:
+                    Console.WriteLine("Message: Cancelled.");
+                    return;
+            }
+            return;
+        }
+        else if (Input.ToLower() == "/clear")
+        {
+            Text_Temp.Clear();
+            Console.WriteLine("Message: Text cleared.");
+        }
+        else if (Input.StartsWith("@[Editor_NULLinput]_Replace_NULLinput_[SrcInfoOfEditor]"))
+        {
+            Text_Temp.AppendLine(null);
+        }
+        else
+        {
+            Text_Temp.AppendLine(Input);
+        }
+    }
+}
+
+
+
+
 
