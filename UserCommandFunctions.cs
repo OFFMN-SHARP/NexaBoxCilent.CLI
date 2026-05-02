@@ -211,6 +211,9 @@ namespace NexaBox.CLI
             Console.WriteLine("  syscall <cmd>                   执行本地命令");
             Console.WriteLine("  call <cmd>                      执行工作台指令");
             Console.WriteLine("  help                            显示此帮助");
+            Console.WriteLine("  copy <src> to <dst>             复制文件");
+            Console.WriteLine("  cd <path>                       切换目录");
+            Console.WriteLine("  cp <src> to <dst>               复制文件 (别名: copy)");
         }
     }
 }
