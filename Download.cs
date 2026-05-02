@@ -76,12 +76,8 @@ namespace NexaBox.CLI.CouldFile
             if (AllLinks[0].StartsWith("*"))
             {
                 List<string> DoneLinks =new List<string>();
-                AllLinks=AllLinks.Skip(1).ToArray();
-                foreach (string link in AllLinks)
-                {
-                    DoneLinks.Add("="+link);
-                }
-                AllLinks = DoneLinks.ToArray();
+                AllLinks[0]=AllLinks[0].Substring(1);
+                AllLinks =AllLinks.Select(x => "="+x).ToArray();
             }
             foreach (string link in AllLinks)
             {//https://drive.nexabox.de/share.html?id=245e3332
