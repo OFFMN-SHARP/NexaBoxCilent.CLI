@@ -27,6 +27,7 @@ namespace NexaBox.CLI
         public static async Task Main(string[] args)
         {
             Console.CancelKeyPress += CancelExit;
+            if(args.Length == 0)args = args.Append("null").ToArray();
             if (args.Length != 3 && !File.Exists("login.cfg") || args[0] != "login" && !File.Exists("login.cfg"))
             {
                 Console.WriteLine("Usage: login <username> <password>");
