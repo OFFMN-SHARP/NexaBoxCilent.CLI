@@ -88,7 +88,12 @@ namespace NexaBox.CLI
 
     // 帮助与退出
         {"help", ""},
-        {"exit", ""}
+        {"exit", ""},
+    
+    //Cmd
+        {"cd", ""},
+        {"copy","to" },
+        {"cp", "to"}
             };
             if (commands.TryGetValue(Command.Split(" ")[0], out string value))
             {
@@ -124,11 +129,11 @@ namespace NexaBox.CLI
                             break;
                         case "sed":
                             if (Cmd.Length != 2) throw new Exception($"The command '{Cmd[0]}' requires exactly 1 argument.");
-                            await Edit(Value1);
+                            await EditW.Edit(Value1);
                             break;
                         case "create":
                             if (Cmd.Length != 2) throw new Exception($"The command '{Cmd[0]}' requires exactly 1 argument.");
-                            await Edit(Value1);
+                            await EditW.Edit(Value1);
                             break;
                         case "from":
                             if (Cmd.Length != 4) throw new Exception($"The command '{Cmd[0]}' requires exactly 3 arguments.");
@@ -205,6 +210,18 @@ namespace NexaBox.CLI
                         case "pushto":
                             if (Cmd.Length != 2) throw new Exception($"The command '{Cmd[0]}' requires exactly 1 arguments.");
                             await CouldFile.Upload.Uploader(Value1);
+                            break;
+                        case "cd":
+                            if (Cmd.Length != 2) throw new Exception($"The command '{Cmd[0]}' requires exactly 1 argument.");
+                            await UserCommandFunctions.ChangeDir(Value1);
+                            break;
+                        case "copy":
+                            if (Cmd.Length != 4) throw new Exception($"The command '{Cmd[0]}' requires exactly 3 arguments.");
+                            await UserCommandFunctions.CopyFile(Value1, Value2);
+                            break;
+                        case "cp":
+                            if (Cmd.Length != 4) throw new Exception($"The command '{Cmd[0]}' requires exactly 3 arguments.");
+                            await UserCommandFunctions.CopyFile(Value1, Value2);
                             break;
                     }
 

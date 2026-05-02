@@ -10,6 +10,17 @@ namespace NexaBox.CLI
 {
     public static class UserCommandFunctions
     {
+        public static async Task CopyFile(string source, string destination)
+        {
+            string FullSource = Path.GetFullPath(source);
+            string FullDestination = Path.GetFullPath(destination);
+            File.Copy(FullSource, FullDestination);
+        }
+        public static async Task ChangeDir(string path)
+        {
+            string FullPath = Path.GetFullPath(path);
+            Directory.SetCurrentDirectory(FullPath);
+        }
         public static async Task FileSearch(string search)
         {
             HttpResponseMessage whereResponse = await Program.Client.GetAsync("https://drive.nexabox.de/api/files");

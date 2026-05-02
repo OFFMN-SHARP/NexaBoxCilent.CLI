@@ -36,7 +36,7 @@ namespace NexaBox.CLI
                     Console.WriteLine("Message: Starting to save the text.");
                     Console.WriteLine("Step1:Select the save mode.");
                     Console.WriteLine("1:Save to file.");
-                    Console.WriteLine("2:Send  text to someone.");
+                    Console.WriteLine("2:Send text to someone.");
                     Console.WriteLine("3:Upload to cloud storage.");
                     Console.WriteLine("4:Cancel.");
                     Console.Write("Input the number:");
@@ -65,6 +65,8 @@ namespace NexaBox.CLI
                             Console.Write("Input the username:");
                             string To_User = Console.ReadLine() ?? "null";
                             await UserCommandFunctions.SendMessage(To_User, Text_Temp.ToString());
+                            if(!File.Exists("MeaasgeSendLog.txt"))File.Create("MeaasgeSendLog.txt").Close();
+                            File.AppendAllText("MeaasgeSendLog.txt", $"\n[{DateTime.Now}|build:{Program.Methods.Build}|For:{To_User}]");
                             break;
                         case 3:
                             if (string.IsNullOrEmpty(FileName))
