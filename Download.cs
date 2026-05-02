@@ -70,7 +70,7 @@ namespace NexaBox.CLI.CouldFile
             Console.WriteLine();
             Console.WriteLine($"Download complete. File saved to '{localPath}'.");
         }
-        public static async Task BatchShareLinkParser(string Links)
+        public static async Task BatchShareLinkParser(string Links,string fPath)
         {
             string[] AllLinks = Links.Split('@');
             if (AllLinks[0].StartsWith("*"))
@@ -115,7 +115,7 @@ namespace NexaBox.CLI.CouldFile
                         if (FileMetaRoot.TryGetProperty("chunks", out JsonElement Chunks))
                         {
                             var chunks = Chunks.EnumerateArray().Select(c => c.GetString()).ToList();
-                            var localFileName = Path.Combine(Environment.CurrentDirectory, FileName);
+                            var localFileName = Path.Combine(fPath, FileName);
                             Console.WriteLine($"Starting download of '{FileName}' ({FileSize} bytes) in {chunks.Count} chunk(s)...");
                             using FileStream fs = File.Create(localFileName);
                             for (int i = 0; i < chunks.Count; i++)
