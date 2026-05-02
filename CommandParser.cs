@@ -76,6 +76,10 @@ namespace NexaBox.CLI
         {"push", ""},
         {"pushto", ""},
 
+                //批量链接解析/单个链接创造
+                {"plks","" },
+                { "mkls","with" },
+
     // 本地系统命令
         {"syscall", ""},
 
@@ -222,6 +226,14 @@ namespace NexaBox.CLI
                         case "cp":
                             if (Cmd.Length != 4) throw new Exception($"The command '{Cmd[0]}' requires exactly 3 arguments.");
                             await UserCommandFunctions.CopyFile(Value1, Value2);
+                            break;
+                        case "plks":
+                            if (Cmd.Length != 2) throw new Exception($"The command '{Cmd[0]}' requires exactly 1 argument.");
+                            await CouldFile.Download.BatchShareLinkParser(Value1);
+                            break;
+                        case "mkls":
+                            if (Cmd.Length != 4) throw new Exception($"The command '{Cmd[0]}' requires exactly 3 arguments.");
+                            await CouldFile.Upload.CreateShareLink(Value1, Value2);
                             break;
                     }
 

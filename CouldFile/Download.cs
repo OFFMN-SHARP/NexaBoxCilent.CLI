@@ -70,5 +70,65 @@ namespace NexaBox.CLI.CouldFile
             Console.WriteLine();
             Console.WriteLine($"Download complete. File saved to '{localPath}'.");
         }
+        public static async Task BatchShareLinkParser(string Links)
+        {
+            string[] AllLinks = Links.Split('@');
+            foreach (string link in AllLinks)
+            {//https://drive.nexabox.de/share.html?id=245e3332
+                string ID = link.Split('=')[1];
+                HttpResponseMessage Share =await Program.Client.GetAsync("https://drive.nexabox.de/api/public/share?id=" + ID);
+                string ShareContent = await Share.Content.ReadAsStringAsync();
+                JsonDocument ShareDoc = JsonDocument.Parse(ShareContent);
+                JsonElement ShareRoot = ShareDoc.RootElement;
+                //{"filename":"...","size":123,"needPassword":true}
+                Console.WriteLine(new string('=', 20));
+                string FileName =ShareRoot.GetProperty("filename").GetString();
+                long FileSize = ShareRoot.GetProperty("size").GetInt64();
+                bool NeedPassword = ShareRoot.GetProperty("needPassword").GetBoolean();
+                Console.WriteLine("File Name: " + FileName);
+                Console.WriteLine("File Size: " + FileSize + " bytes");
+                Console.Write("Are you sure to download this file? (y/n): ");
+                ConsoleKeyInfo key = Console.ReadKey();
+                if(!key.KeyChar.ToString().ToLower().Equals("y"))continue;
+                while (true)
+                {//{"id":"a1b2c3d4", "password":"abcd"}
+                    Console.WriteLine();
+                    Console.Write("Please enter your password: ");
+                    string Password = Console.ReadLine() ?? "";
+                    var downloadData = new
+                    {
+                        id = ID,
+                        password = Password
+                    };
+                    HttpResponseMessage FileMetaGet = await Program.Client.PostAsync("https://drive.nexabox.de/api/public/share?id=" + ID, new StringContent(JsonSerializer.Serialize(downloadData), System.Text.Encoding.UTF8, "application/json"));
+                    if (FileMetaGet.IsSuccessStatusCode)
+                    {
+                        string FileMetaContent = await FileMetaGet.Content.ReadAsStringAsync();
+                        JsonDocument FileMetaDoc = JsonDocument.Parse(FileMetaContent);
+                        JsonElement FileMetaRoot = FileMetaDoc.RootElement;
+                        if (FileMetaRoot.TryGetProperty("chunks", out JsonElement Chunks))
+                        {
+                            var chunks = Chunks.EnumerateArray().Select(c => c.GetString()).ToList();
+                            var localFileName = Path.Combine(Environment.CurrentDirectory, FileName);
+                            Console.WriteLine($"Starting download of '{FileName}' ({FileSize} bytes) in {chunks.Count} chunk(s)...");
+                            using FileStream fs = File.Create(localFileName);
+                            for (int i = 0; i < chunks.Count; i++)
+                            {
+                                string chunkUrl = chunks[i];
+                                HttpResponseMessage chunkResp = await Program.Client.GetAsync(chunkUrl);
+
+                                using Stream chunkStream = await chunkResp.Content.ReadAsStreamAsync();
+                                await chunkStream.CopyToAsync(fs);
+
+                                Console.Write($"\rProgress: {i + 1}/{chunks.Count} chunks downloaded");
+                            }
+                            Console.WriteLine();
+                            Console.WriteLine($"File saved to '{localFileName}'.");
+                        }
+                    }
+                    else Console.WriteLine("File not found or password is incorrect");
+                }
+            }
+        }
     }
 }

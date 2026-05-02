@@ -214,6 +214,8 @@ namespace NexaBox.CLI
             Console.WriteLine("  copy <src> to <dst>             复制文件");
             Console.WriteLine("  cd <path>                       切换目录");
             Console.WriteLine("  cp <src> to <dst>               复制文件 (别名: copy)");
+            Console.WriteLine("  plks <link@link2@link3>         批量拉取已分享文件");
+            Console.WriteLine("  mkls <fileID> with <password>   创建文件分享链接");
         }
     }
 }

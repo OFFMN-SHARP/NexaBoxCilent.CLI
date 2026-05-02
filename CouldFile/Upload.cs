@@ -29,6 +29,32 @@ namespace NexaBox.CLI.CouldFile
             Console.WriteLine($"File sliced into {slices.Count} part(s).");
             return slices;
         }
+        public static async Task CreateShareLink(string FileID,string? Password = null)
+        {
+            var Request = new
+            {
+                fileId = FileID,
+                password = Password
+            };
+            var RequestContent = new StringContent(JsonSerializer.Serialize(Request), Encoding.UTF8, "application/json");
+            var ShareLinkResp = await Program.Client.PostAsync("https://drive.nexabox.de/api/share", RequestContent);
+            if (ShareLinkResp.IsSuccessStatusCode)
+            {
+                Console.WriteLine("Share link created.");
+                string ShareStr =await ShareLinkResp.Content.ReadAsStringAsync();
+                //{"success":true,"shareId":"b9ce5fd2","url":"/share.html?id=b9ce5fd2"}
+                JsonDocument ShareDoc = JsonDocument.Parse(ShareStr);
+                JsonElement ShareElement = ShareDoc.RootElement;
+                bool Success = ShareElement.GetProperty("success").GetBoolean();
+                if (Success)
+                {////https://drive.nexabox.de/share.html?id=245e3332
+                    Console.WriteLine("Share link: https://drive.nexabox.de"+ShareElement.GetProperty("url").GetString());
+                    Console.WriteLine("Share ID: "+ShareElement.GetProperty("shareId").GetString());
+                }
+                else Console.WriteLine("Failed to get share link.");
+            }
+            else Console.WriteLine("Failed to create share link.");
+        }
         public static async Task Uploader(string filePath)
         {
             var fileslice = await SliceFile(filePath);
