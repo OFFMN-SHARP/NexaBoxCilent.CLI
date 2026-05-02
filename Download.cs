@@ -46,6 +46,7 @@ namespace NexaBox.CLI.CouldFile
             Console.WriteLine($"Downloading '{fileName}' ({totalSize} bytes, {chunks.Count} chunks)...");
 
             // 3. 按顺序下载所有切片并写入本地文件
+            if(Directory.Exists(localPath)) localPath = Path.Combine(localPath, fileName);
             using FileStream fs = File.Create(localPath);
             long downloaded = 0;
 
