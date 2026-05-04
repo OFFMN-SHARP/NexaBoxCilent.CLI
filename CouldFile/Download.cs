@@ -149,16 +149,21 @@ namespace NexaBox.CLI.CouldFile
                 string FileName =ShareRoot.GetProperty("filename").GetString();
                 long FileSize = ShareRoot.GetProperty("size").GetInt64();
                 bool NeedPassword = ShareRoot.GetProperty("needPassword").GetBoolean();
-                Console.WriteLine("File Name: " + FileName);
-                Console.WriteLine("File Size: " + FileSize + " bytes");
-                Console.Write("Are you sure to download this file? (y/n): ");
+                bool IsFolder = ShareRoot.GetProperty("isFolder").GetBoolean();
+                Console.WriteLine("File/Folder Name: " + FileName);
+                Console.WriteLine("File/Folder Size: " + FileSize + " bytes");
+                Console.Write("Are you sure to download this file/folder? (y/n): ");
                 ConsoleKeyInfo key = Console.ReadKey();
                 if(!key.KeyChar.ToString().ToLower().Equals("y"))continue;
                 while (true)
                 {//{"id":"a1b2c3d4", "password":"abcd"}
                     Console.WriteLine();
-                    Console.Write("Please enter your password: ");
-                    string Password = Console.ReadLine() ?? "";
+                    string Password = "";
+                    if (NeedPassword)
+                    {
+                        Console.Write("Please enter your password: ");
+                        Password = Console.ReadLine() ?? "";
+                    }
                     var downloadData = new
                     {
                         id = ID,

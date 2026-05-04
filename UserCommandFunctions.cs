@@ -23,46 +23,128 @@ namespace NexaBox.CLI
         }
         public static async Task FileSearch(string search)
         {
-            string F_path = "/" + search;
             HttpResponseMessage whereResponse = await Program.Client.GetAsync("https://drive.nexabox.de/api/files");
             string whereContent = await whereResponse.Content.ReadAsStringAsync();
             JsonDocument WhereDoc = JsonDocument.Parse(whereContent);
             List<JsonElement> files = new List<JsonElement>();
+
             Console.WriteLine("Searching from drive files: ");
             foreach (JsonElement file in WhereDoc.RootElement.EnumerateArray())
             {
-                string path = file.GetProperty("path").GetString();
-                if(!path.EndsWith("/"))path = path + "/";
-                Console.WriteLine(path+file.GetProperty("filename").GetString());
-                if (!string.IsNullOrEmpty(file.GetProperty("filename").GetString()))
+                bool IsFolder = false;
+                string filepath = "/";
+                string fileId = file.GetProperty("id").GetString() ?? "UnknownID";
+                string filename = "";
+                string filesize = "";
+                if (file.TryGetProperty("isFolder", out JsonElement isFolderElem))
                 {
-                    try
+                    IsFolder = isFolderElem.GetBoolean();
+                }else IsFolder = false;
+                if(file.TryGetProperty("filename", out JsonElement _filename))
+                {
+                    if (file.TryGetProperty("path", out JsonElement path)) filepath = path.GetString() ?? "/"; else filepath = "/";
+                    filename = _filename.GetString() ?? "UnknownFilename";
+                    filesize = file.GetProperty("size").GetInt64() + " bytes";
+                    string FullPath;
+                    if(!filepath.EndsWith("/"))FullPath = filepath + "/"+ filename; else FullPath = filepath+filename;
+                    if(!FullPath.StartsWith("/"))FullPath = "/" + FullPath;
+                    Console.WriteLine(FullPath + " (" + filesize + ")");
+                    if (IsFolder)
                     {
-                        bool isFolder = file.GetProperty("isFolder").GetBoolean();
-                        if (isFolder) continue;
-                    }
-                    catch
-                    { }
-                    if (!search.StartsWith('*'))
-                    {
-                        if (file.GetProperty("filename").GetString() == search)
+                        HttpResponseMessage FolderWhereResponse = await Program.Client.GetAsync("https://drive.nexabox.de/api/files?path=" + FullPath);
+                        string FolderWhereContent = await FolderWhereResponse.Content.ReadAsStringAsync();
+                        JsonDocument FolderWhereDoc = JsonDocument.Parse(FolderWhereContent);
+                        List<string> ChildFoldersFullPaths = new List<string>();
+                        foreach (JsonElement ChilFolder in FolderWhereDoc.RootElement.EnumerateArray())
                         {
-                            files.Add(file);
+                            if (ChilFolder.TryGetProperty("isFolder", out JsonElement isFolderElem2))
+                            {
+                                string FullPath2;
+                                string PathGen = ChilFolder.GetProperty("path").GetString() ?? "/";
+                                if (!PathGen.EndsWith("/")) FullPath2 = PathGen + "/" + ChilFolder.GetProperty("filename").GetString(); else FullPath2 = PathGen + ChilFolder.GetProperty("filename").GetString();
+                                if (!FullPath2.StartsWith("/")) FullPath2 = "/" + FullPath2;
+                                if (isFolderElem2.GetBoolean())
+                                {
+                                    ChildFoldersFullPaths.Add(FullPath2);
+                                }
+                                else
+                                {
+                                    if (!search.StartsWith("*"))
+                                    {
+                                        if (ChilFolder.GetProperty("filename").GetString() == search)
+                                            files.Add(ChilFolder);
+                                    }
+                                    else
+                                    {
+                                        if (ChilFolder.GetProperty("filename").GetString().EndsWith(search.TrimStart('*')))
+                                            files.Add(ChilFolder);
+                                    }
+                                }
+                            }
+                            if (!search.StartsWith("*"))
+                            {
+                                if (filename == search)
+                                    files.Add(file);
+                            }
+                            else
+                            {
+                                if (filename.EndsWith(search.TrimStart('*')))
+                                    files.Add(file);
+                            }
+                        }
+                        while (ChildFoldersFullPaths.Count > 0)
+                        {
+                            List<string> TEMPFolders = new List<string>();
+                            foreach (string ChildFolderFullPath in ChildFoldersFullPaths)
+                            {
+                                HttpResponseMessage ChildFolderWhereResponse = await Program.Client.GetAsync("https://drive.nexabox.de/api/files?path=" + ChildFolderFullPath);
+                                string ChildFolderWhereContent = await ChildFolderWhereResponse.Content.ReadAsStringAsync();
+                                JsonDocument ChildFolderWhereDoc = JsonDocument.Parse(ChildFolderWhereContent);
+                                foreach (JsonElement ChilFolder in ChildFolderWhereDoc.RootElement.EnumerateArray())
+                                {
+                                    if (ChilFolder.TryGetProperty("isFolder", out JsonElement isFolderElem2))
+                                    {
+                                        string FullPath2;
+                                        string PathGen = ChilFolder.GetProperty("path").GetString() ?? "/";
+                                        if (!PathGen.EndsWith("/")) FullPath2 = PathGen + "/" + ChilFolder.GetProperty("filename").GetString(); else FullPath2 = PathGen + ChilFolder.GetProperty("filename").GetString();
+                                        if (!FullPath2.StartsWith("/")) FullPath2 = "/" + FullPath2;
+                                        if (isFolderElem2.GetBoolean())
+                                        {
+                                            TEMPFolders.Add(FullPath2);
+                                        }
+                                    }
+                                    if (!search.StartsWith("*"))
+                                    {
+                                        if (ChilFolder.GetProperty("filename").GetString() == search)
+                                            files.Add(ChilFolder);
+                                    }
+                                    else
+                                    {
+                                        if (ChilFolder.GetProperty("filename").GetString().EndsWith(search.TrimStart('*')))
+                                            files.Add(ChilFolder);
+                                    }
+                                }
+                            }
+                            ChildFoldersFullPaths = TEMPFolders;
                         }
                     }
                     else
                     {
-                        if (file.GetProperty("filename").GetString().EndsWith(search.TrimStart('*')))
+                        if (!search.StartsWith("*"))
                         {
-                            files.Add(file);
+                            if (filename == search)
+                                files.Add(file);
+                        }
+                        else
+                        {
+                            if (filename.EndsWith(search.TrimStart('*')))
+                                files.Add(file);
                         }
                     }
-
                 }
-                Console.Out.Flush();
+                else continue;
             }
-            Console.WriteLine();
-            Console.WriteLine();
+
             Console.WriteLine("Search completed.");
             foreach (JsonElement file in files)
             {
@@ -70,7 +152,7 @@ namespace NexaBox.CLI
                 Console.WriteLine("File ID: " + file.GetProperty("id").GetString());
                 Console.WriteLine("File Name: " + file.GetProperty("filename").GetString());
                 Console.WriteLine("File Size: " + file.GetProperty("size").GetInt64() + " bytes");
-                Console.WriteLine("File Chunks:" + string.Join(", ", file.GetProperty("chunks").EnumerateArray().Select(c => c.GetString())));
+                Console.WriteLine("File Chunks: " + string.Join(", ", file.GetProperty("chunks").EnumerateArray().Select(c => c.GetString())));
                 Console.WriteLine("File Path: " + file.GetProperty("path").GetString());
             }
         }
