@@ -23,6 +23,7 @@ namespace NexaBox.CLI
         }
         public static async Task FileSearch(string search)
         {
+            string F_path = "/" + search;
             HttpResponseMessage whereResponse = await Program.Client.GetAsync("https://drive.nexabox.de/api/files");
             string whereContent = await whereResponse.Content.ReadAsStringAsync();
             JsonDocument WhereDoc = JsonDocument.Parse(whereContent);
@@ -30,9 +31,18 @@ namespace NexaBox.CLI
             Console.WriteLine("Searching from drive files: ");
             foreach (JsonElement file in WhereDoc.RootElement.EnumerateArray())
             {
-                Console.WriteLine(file.GetProperty("filename").GetString());
+                string path = file.GetProperty("path").GetString();
+                if(!path.EndsWith("/"))path = path + "/";
+                Console.WriteLine(path+file.GetProperty("filename").GetString());
                 if (!string.IsNullOrEmpty(file.GetProperty("filename").GetString()))
                 {
+                    try
+                    {
+                        bool isFolder = file.GetProperty("isFolder").GetBoolean();
+                        if (isFolder) continue;
+                    }
+                    catch
+                    { }
                     if (!search.StartsWith('*'))
                     {
                         if (file.GetProperty("filename").GetString() == search)
@@ -47,6 +57,7 @@ namespace NexaBox.CLI
                             files.Add(file);
                         }
                     }
+
                 }
                 Console.Out.Flush();
             }
@@ -60,6 +71,7 @@ namespace NexaBox.CLI
                 Console.WriteLine("File Name: " + file.GetProperty("filename").GetString());
                 Console.WriteLine("File Size: " + file.GetProperty("size").GetInt64() + " bytes");
                 Console.WriteLine("File Chunks:" + string.Join(", ", file.GetProperty("chunks").EnumerateArray().Select(c => c.GetString())));
+                Console.WriteLine("File Path: " + file.GetProperty("path").GetString());
             }
         }
         public static async Task FileInfo(string fileId)
@@ -214,7 +226,7 @@ namespace NexaBox.CLI
             Console.WriteLine("  copy <src> to <dst>             复制文件");
             Console.WriteLine("  cd <path>                       切换目录");
             Console.WriteLine("  cp <src> to <dst>               复制文件 (别名: copy)");
-            Console.WriteLine("  plks <link@link2@link3>         批量拉取已分享文件");
+            Console.WriteLine("  plks <link@link2@link3> to <path> 批量拉取已分享文件");
             Console.WriteLine("  mkls <fileID> with <password>   创建文件分享链接");
         }
     }

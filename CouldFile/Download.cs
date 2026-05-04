@@ -9,6 +9,63 @@ namespace NexaBox.CLI.CouldFile
 {
     public static class Download
     {
+        public static async Task AutoDownload(string folderId = ".", string localPath = "")
+        {
+            if (!folderId.StartsWith("/")) folderId = "/" + folderId;
+            HttpResponseMessage whereResponse = await Program.Client.GetAsync("https://drive.nexabox.de/api/files");
+            string whereContent = await whereResponse.Content.ReadAsStringAsync();
+            JsonDocument WhereDoc = JsonDocument.Parse(whereContent);
+            List<JsonElement> files = new List<JsonElement>();
+            foreach (JsonElement file in WhereDoc.RootElement.EnumerateArray())
+            {
+                if (file.GetProperty("path").GetString() == folderId)
+                {
+                    files.Add(file);
+                }
+            }
+
+            foreach (JsonElement file in WhereDoc.RootElement.EnumerateArray())
+            {
+                if (file.GetProperty("path").GetString().StartsWith(folderId + "/"))
+                {
+                    files.Add(file);
+                }
+            }
+            if (files.Count > 0)
+            {
+                if (!Directory.Exists(Path.Combine(localPath, folderId))) Directory.CreateDirectory(folderId);
+                localPath = Path.Combine(localPath, folderId);
+            }
+            if (files.Count == 0)
+            {
+                foreach(JsonElement file in WhereDoc.RootElement.EnumerateArray())
+                {
+                    if (file.GetProperty("filename").GetString() == folderId.TrimStart('/'))
+                    {
+                        files.Add(file);
+                    }
+                    if (folderId.TrimStart('/').StartsWith('*'))
+                    {
+                        if(file.GetProperty("filename").GetString().EndsWith(folderId.TrimStart('*')))
+                        {
+                            files.Add(file);
+                        }
+                    }
+                }
+                if (files.Count == 0)
+                {
+                    Console.WriteLine("Folder or file not found.");
+                    return;
+                }
+            }
+            foreach (JsonElement file in files)
+            {
+                string fileName = file.GetProperty("filename").GetString();
+                Console.WriteLine($"Downloading '{fileName}'...");
+                await DownloadFile(fileName, localPath);
+            }
+        }
+
         public static async Task DownloadFile(string fileName, string localPath)
         {
             // 1. 获取文件列表，找到目标文件
@@ -46,6 +103,7 @@ namespace NexaBox.CLI.CouldFile
             Console.WriteLine($"Downloading '{fileName}' ({totalSize} bytes, {chunks.Count} chunks)...");
 
             // 3. 按顺序下载所有切片并写入本地文件
+            if(Directory.Exists(localPath)) localPath = Path.Combine(localPath, fileName);
             using FileStream fs = File.Create(localPath);
             long downloaded = 0;
 
@@ -70,9 +128,15 @@ namespace NexaBox.CLI.CouldFile
             Console.WriteLine();
             Console.WriteLine($"Download complete. File saved to '{localPath}'.");
         }
-        public static async Task BatchShareLinkParser(string Links)
+        public static async Task BatchShareLinkParser(string Links,string fPath)
         {
             string[] AllLinks = Links.Split('@');
+            if (AllLinks[0].StartsWith("*"))
+            {
+                List<string> DoneLinks =new List<string>();
+                AllLinks[0]=AllLinks[0].Substring(1);
+                AllLinks =AllLinks.Select(x => "="+x).ToArray();
+            }
             foreach (string link in AllLinks)
             {//https://drive.nexabox.de/share.html?id=245e3332
                 string ID = link.Split('=')[1];
@@ -109,7 +173,7 @@ namespace NexaBox.CLI.CouldFile
                         if (FileMetaRoot.TryGetProperty("chunks", out JsonElement Chunks))
                         {
                             var chunks = Chunks.EnumerateArray().Select(c => c.GetString()).ToList();
-                            var localFileName = Path.Combine(Environment.CurrentDirectory, FileName);
+                            var localFileName = Path.Combine(fPath, FileName);
                             Console.WriteLine($"Starting download of '{FileName}' ({FileSize} bytes) in {chunks.Count} chunk(s)...");
                             using FileStream fs = File.Create(localFileName);
                             for (int i = 0; i < chunks.Count; i++)

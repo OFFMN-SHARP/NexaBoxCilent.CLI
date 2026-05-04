@@ -75,6 +75,7 @@ namespace NexaBox.CLI
     // 上传文件
         {"push", ""},
         {"pushto", ""},
+                {"mkdir","from" },
 
                 //批量链接解析/单个链接创造
                 {"plks","to" },
@@ -141,11 +142,11 @@ namespace NexaBox.CLI
                             break;
                         case "from":
                             if (Cmd.Length != 4) throw new Exception($"The command '{Cmd[0]}' requires exactly 3 arguments.");
-                            await CouldFile.Download.DownloadFile(Value1, Value2);
+                            await CouldFile.Download.AutoDownload(Value1, Value2);
                             break;
                         case "download":
                             if (Cmd.Length != 4) throw new Exception($"The command '{Cmd[0]}' requires exactly 3 arguments.");
-                            await CouldFile.Download.DownloadFile(Value1, Value2);
+                            await CouldFile.Download.AutoDownload(Value1, Value2);
                             break;
                         case "syscall":
                             if (Cmd.Length != 2) throw new Exception($"The command '{Cmd[0]}' requires exactly 1 argument.");
@@ -234,6 +235,10 @@ namespace NexaBox.CLI
                         case "mkls":
                             if (Cmd.Length != 4) throw new Exception($"The command '{Cmd[0]}' requires exactly 3 arguments.");
                             await CouldFile.Upload.CreateShareLink(Value1, Value2);
+                            break;
+                        case "mkdir":
+                            if (Cmd.Length != 4) throw new Exception($"The command '{Cmd[0]}' requires exactly 3 arguments.");
+                            await CouldFile.Upload.CreateFolderAsync(Value1, Value2);
                             break;
                     }
 

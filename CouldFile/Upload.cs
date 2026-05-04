@@ -57,6 +57,11 @@ namespace NexaBox.CLI.CouldFile
         }
         public static async Task Uploader(string filePath)
         {
+            string ParseredPath = String.Empty;
+            string UNParseredPath ="/"+ filePath;
+            string[] PathParts = UNParseredPath.Split('/').Skip(1).ToArray();
+            if(PathParts.Length==1)ParseredPath="/";
+            else ParseredPath = String.Join("/", PathParts.Take(PathParts.Length - 1));
             var fileslice = await SliceFile(filePath);
             List<string> chunks = new List<string>();
             for (int i = 0; i < fileslice.Count; i++)
@@ -90,22 +95,34 @@ namespace NexaBox.CLI.CouldFile
                 string chunkUrl = host + "/" + i;  // 具体以 API 返回为准
                 chunks.Add(chunkUrl);
                 Console.WriteLine($"Slice {i + 1}/{fileslice.Count} uploaded.");
-                var meta = new
-                {
-                    filename = Path.GetFileName(filePath),
-                    size = new FileInfo(filePath).Length,
-                    chunks = chunks
-                };
-                var metaContent = new StringContent(
-                    JsonSerializer.Serialize(meta), Encoding.UTF8, "application/json");
-                HttpResponseMessage metaResp = await Program.Client.PostAsync(
-                    "https://drive.nexabox.de/api/files", metaContent);
-
-                if (metaResp.IsSuccessStatusCode)
-                    Console.WriteLine("Upload complete.");
-                else
-                    Console.WriteLine("Metadata submission failed.");
             }
+            // 把这两行从 for 循环里拿出来，放到 for 循环的下面
+            var meta = new
+            {
+                filename = Path.GetFileName(filePath),
+                size = new FileInfo(filePath).Length,
+                chunks = chunks,  // 此时 chunks 已收集完所有切片 URL
+                path = ParseredPath
+            };
+            var metaContent = new StringContent(
+                JsonSerializer.Serialize(meta), Encoding.UTF8, "application/json");
+            HttpResponseMessage metaResp = await Program.Client.PostAsync(
+                "https://drive.nexabox.de/api/files", metaContent);
+            if (metaResp.IsSuccessStatusCode)
+                Console.WriteLine("Upload complete.");
+            else
+                Console.WriteLine("Metadata submission failed.");
+        }
+        public static async Task CreateFolderAsync(string folderName, string parentPath)
+        {
+            var content = new StringContent(JsonSerializer.Serialize(new
+            {
+                name = folderName,
+                path = parentPath
+            }), Encoding.UTF8, "application/json");
+
+            var response = await Program.Client.PostAsync($"https://drive.nexabox.de/api/folder", content);
+            response.EnsureSuccessStatusCode();
         }
     }
 }
