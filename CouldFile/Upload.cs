@@ -55,6 +55,20 @@ namespace NexaBox.CLI.CouldFile
             }
             else Console.WriteLine("Failed to create share link.");
         }
+        public static async Task PushDirectory(string directoryPath)
+        {
+            int count = 0;
+            int counted = 0;
+            string FullPath = Path.GetFullPath(directoryPath);
+            string[] Files = Directory.GetFiles(FullPath, "*", SearchOption.AllDirectories);
+            count = Files.Length;
+            foreach (string file in Files)
+            {
+                Console.WriteLine($"Uploading {file} (Directory:{counted}/{count})...");
+                await Uploader(file);
+                counted++;
+            }
+        }
         public static async Task Uploader(string filePath)
         {
             string ParseredPath = String.Empty;

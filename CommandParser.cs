@@ -76,6 +76,7 @@ namespace NexaBox.CLI
         {"push", ""},
         {"pushto", ""},
                 {"mkdir","from" },
+                {"pushdir","" },
 
                 //批量链接解析/单个链接创造
                 {"plks","to" },
@@ -239,6 +240,10 @@ namespace NexaBox.CLI
                         case "mkdir":
                             if (Cmd.Length != 4) throw new Exception($"The command '{Cmd[0]}' requires exactly 3 arguments.");
                             await CouldFile.Upload.CreateFolderAsync(Value1, Value2);
+                            break;
+                        case "pushdir":
+                            if (Cmd.Length != 2) throw new Exception($"The command '{Cmd[0]}' requires exactly 1 argument.");
+                            await CouldFile.Upload.PushDirectory(Value1);
                             break;
                     }
 
